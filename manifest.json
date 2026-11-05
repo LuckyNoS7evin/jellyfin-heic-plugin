@@ -1,0 +1,21 @@
+[
+  {
+    "guid": "5b0f7c1e-3a6d-4f2b-9e84-2c71d0a9b6e3",
+    "name": "HEIC Photos",
+    "description": "Shows HEIC/HEIF photos (iPhone) in photo libraries, converted with Jellyfin's own ffmpeg when they're viewed. No converted copies are kept beside your photos.",
+    "overview": "Shows HEIC/HEIF photos (iPhone) in photo libraries, converted with Jellyfin's own ffmpeg when they're viewed. No converted copies are kept beside your photos.",
+    "owner": "LuckyNoS7evin",
+    "category": "General",
+    "imageUrl": "",
+    "versions": [
+      {
+        "version": "0.1.0.0",
+        "changelog": "HEIC Photos plugin: lists HEIC/HEIF files in photo libraries as photos (and folders of them as albums), reads their date, camera, settings, GPS and size with MetadataExtractor, and converts them with Jellyfin's ffmpeg whenever an image is asked for, through a wrapper around the server's image encoder; nothing is kept beside the photos",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://luckynos7evin.github.io/jellyfin-heic-plugin/releases/heic-photos_0.1.0.0.zip",
+        "checksum": "a11ad50935fe4e9e31323cbe13d7bcfe",
+        "timestamp": "2026-11-05T10:31:26Z"
+      }
+    ]
+  }
+]
