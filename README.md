@@ -16,6 +16,12 @@ Every Jellyfin app benefits: the web client, the phone and TV apps. iPhone photo
 
 - Jellyfin 12.4 or later, with its bundled ffmpeg (jellyfin-ffmpeg 8 reads HEIC, its tiles and its rotation).
 
+## Also: photos Jellyfin's reader misses
+
+Jellyfin reads other photos' details (JPEG, PNG, camera raw...) with a library that isn't safe to use on several files at once, and a library scan does exactly that. Now and then a photo fails ("Image Provider - Error reading image tag ... Index was outside the bounds of the array" in the log) and is left with no date, camera or GPS position. Which ones is down to timing; the files are fine.
+
+When a photo comes out of Jellyfin's reader with none of those details, this plugin reads it again with its own reader (which has no such problem) and fills in what it finds: date taken, camera, settings, GPS position and rotation. It never clears anything Jellyfin did read. A rescan of the library repairs photos that failed in earlier scans.
+
 ## Notes
 
 - **Live Photos:** an iPhone Live Photo is a HEIC plus a short `.mov` clip of the same name. Jellyfin normally hides a photo that has a video of the same name beside it (it takes the photo to be the video's poster). This plugin lists the HEIC anyway; the clip shows as a video too, as before.

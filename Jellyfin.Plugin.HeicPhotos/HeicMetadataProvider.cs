@@ -13,6 +13,10 @@ namespace Jellyfin.Plugin.HeicPhotos;
 /// <summary>
 /// A HEIC photo's details, as Jellyfin's own reader gives other photos (which skips HEIC): when it
 /// was taken, the camera and its settings, where (GPS), and its size as shown.
+/// Also a second reading of other photos that came out of Jellyfin's reader with none of those
+/// details: its library (TagLib#) shares state between threads, so in a parallel library scan
+/// some photos fail with "Index was outside the bounds of the array" and are left without a date,
+/// camera or place. This reader has no such problem; it only fills in, never clears.
 /// </summary>
 public class HeicMetadataProvider : ICustomMetadataProvider<Photo>, IHasItemChangeMonitor, IHasOrder
 {
@@ -48,7 +52,7 @@ public class HeicMetadataProvider : ICustomMetadataProvider<Photo>, IHasItemChan
     {
         if (!Heic.IsHeic(item.Path))
         {
-            return Task.FromResult(ItemUpdateType.None);
+            return Task.FromResult(FillIn(item));
         }
 
         item.SetImagePath(ImageType.Primary, item.Path);
@@ -67,9 +71,58 @@ public class HeicMetadataProvider : ICustomMetadataProvider<Photo>, IHasItemChan
         return Task.FromResult(ItemUpdateType.ImageUpdate | ItemUpdateType.MetadataImport);
     }
 
-    private static void Apply(Photo item, IReadOnlyList<MetadataExtractor.Directory> dirs)
+    // Nothing read: no date, camera, settings or place. (A photo that has none of them, such as a
+    // screenshot, gets a quick second look each refresh, which finds nothing.)
+    private static bool LooksUnread(Photo item)
+        => item.PremiereDate is null && string.IsNullOrEmpty(item.CameraMake) && string.IsNullOrEmpty(item.CameraModel)
+            && item.Latitude is null && item.ExposureTime is null && item.FocalLength is null;
+
+    private ItemUpdateType FillIn(Photo item)
     {
-        if (Heic.ReadSize(dirs) is { } size)
+        if (!item.IsFileProtocol || string.IsNullOrEmpty(item.Path) || !LooksUnread(item))
+        {
+            return ItemUpdateType.None;
+        }
+
+        IReadOnlyList<MetadataExtractor.Directory> dirs;
+        try
+        {
+            dirs = ImageMetadataReader.ReadMetadata(item.Path);
+        }
+        catch (Exception ex)
+        {
+            // Formats this reader doesn't know, or no details at all: as Jellyfin left it.
+            _logger.LogDebug(ex, "No second reading of {Path}", item.Path);
+            return ItemUpdateType.None;
+        }
+
+        var ifd0 = dirs.OfType<ExifIfd0Directory>().FirstOrDefault();
+        var exif = dirs.OfType<ExifSubIfdDirectory>().FirstOrDefault();
+        var gps = dirs.OfType<GpsDirectory>().FirstOrDefault();
+        if (ifd0 is null && exif is null && gps is null)
+        {
+            return ItemUpdateType.None;
+        }
+
+        Apply(item, dirs, heic: false);
+        // Turned as the camera says (Jellyfin's reader would have set this too).
+        if (ifd0 is not null && ifd0.TryGetInt32(ExifDirectoryBase.TagOrientation, out var o) && o is >= 1 and <= 8)
+        {
+            item.Orientation = (ImageOrientation)o;
+        }
+
+        if (LooksUnread(item))
+        {
+            return ItemUpdateType.None;
+        }
+
+        _logger.LogInformation("Read the details of {Path}, which Jellyfin's photo reader missed", item.Path);
+        return ItemUpdateType.MetadataImport;
+    }
+
+    private static void Apply(Photo item, IReadOnlyList<MetadataExtractor.Directory> dirs, bool heic = true)
+    {
+        if (heic && Heic.ReadSize(dirs) is { } size)
         {
             item.Width = size.Width;
             item.Height = size.Height;
@@ -110,7 +163,7 @@ public class HeicMetadataProvider : ICustomMetadataProvider<Photo>, IHasItemChan
                 item.Altitude = below ? -alt.ToDouble() : alt.ToDouble();
             }
         }
-        else
+        else if (heic)
         {
             item.Latitude = item.Longitude = item.Altitude = null;
         }
